@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProFile Compressor - Precision Compression</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ProFile Compressor</h1>
+            <p>Compress your files securely with precise target control and zero quality loss loopholes.</p>
+        </header>
+
+        <main>
+            <form id="uploadForm">
+                <div class="drop-zone" id="dropZone">
+                    <span class="drop-zone-prompt" id="dropZonePrompt">
+                        Drag & drop your file here or <span class="browse-link">browse</span>
+                    </span>
+                    <input type="file" id="fileInput" name="file" class="drop-zone-input" accept="image/*">
+                    
+                    <!-- NEW: Image Preview Container -->
+                    <div id="previewContainer" class="hidden">
+                        <img id="imagePreview" src="" alt="Image Preview">
+                        <button type="button" id="cancelBtn" class="btn-cancel">Remove Image</button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label for="targetSize">Target Size (KB):</label>
+                    <input type="number" id="targetSize" name="targetSize" value="500" min="50" max="50000">
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn">Compress File Now</button>
+            </form>
+
+            <div id="statusMessage" class="hidden"></div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
