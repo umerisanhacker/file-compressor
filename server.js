@@ -4,7 +4,7 @@ const sharp = require('sharp');
 const cors = require('cors');
 
 const app = express();
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 app.use(cors({
     origin: '*',
@@ -12,6 +12,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
+
+// --- KEEP-ALIVE HEALTH CHECK ENDPOINT ---
+app.get('/ping', (req, res) => res.send('OK'));
 
 // NEW: RAM-Based Storage. No more 'ENOENT' file system errors!
 const storage = multer.memoryStorage();
