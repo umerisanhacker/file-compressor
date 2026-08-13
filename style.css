@@ -1,11 +1,4 @@
-/* ==================================================================
-   style.css — FULL REPLACEMENT for the new index.html + script.js
-   (delete the old Segoe-UI/glassmorphism styles; paste this entire
-   file so every new component — 3D canvases, steps, dropzone,
-   hex aperture, compare slider — is styled and flows correctly)
-   ================================================================== */
-
-:root{
+root{
   --bg0:#070b16; --bg1:#0d1430;
   --card:rgba(15,23,48,.6);
   --line:rgba(255,255,255,.13);
