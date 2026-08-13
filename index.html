@@ -1,45 +1,772 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProFile Compressor - Precision Compression</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProFile — Squeeze any image to your exact size</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/unbounded@latest/latin-500-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/unbounded@latest/latin-800-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/outfit@latest/latin-400-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/outfit@latest/latin-600-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/latin-500-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/latin-700-normal.css">
+
+<style>
+:root{
+  --bg0:#0a0f1e; --bg1:#101a36;
+  --card:rgba(17,26,52,.62);
+  --line:rgba(255,255,255,.13);
+  --ink:#eaf0ff; --dim:#8f9ac0;
+  --coral:#ff6b4a; --coral2:#ff8f66;
+  --aqua:#4ee1c1; --gold:#ffd166; --sky:#7aa2ff; --pink:#ff9ecb;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --disp:'Unbounded',system-ui,sans-serif;
+  --body:'Outfit',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--body);color:var(--ink);
+  background:
+    radial-gradient(1200px 700px at 80% -10%,#1a2a55 0%,transparent 55%),
+    radial-gradient(900px 600px at -10% 110%,#12363a 0%,transparent 55%),
+    linear-gradient(160deg,var(--bg1),var(--bg0) 70%);
+  background-attachment:fixed;
+  overflow-x:hidden;
+}
+::selection{background:var(--coral);color:#fff}
+button,input,a{font-family:inherit}
+:focus-visible{outline:2px solid var(--aqua);outline-offset:3px;border-radius:8px}
+
+/* ---------- FX canvases ---------- */
+#fxBack,#fxFront{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#fxBack{z-index:0}
+#fxFront{z-index:40}
+#cursorGlow{
+  position:fixed;left:0;top:0;width:340px;height:340px;margin:-170px 0 0 -170px;
+  border-radius:50%;pointer-events:none;z-index:1;mix-blend-mode:screen;
+  background:radial-gradient(circle,rgba(78,225,193,.14),rgba(122,162,255,.08) 45%,transparent 70%);
+  will-change:transform;
+}
+
+/* ---------- layout ---------- */
+.app{position:relative;z-index:2;min-height:100svh;display:flex;flex-direction:column;align-items:center;padding:22px clamp(14px,4vw,32px) 40px}
+.top{width:100%;max-width:640px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:clamp(22px,5vh,52px)}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-weight:800;font-size:17px;letter-spacing:.02em}
+.logo-dot{width:22px;height:22px;border-radius:8px;background:conic-gradient(from 210deg,var(--coral),var(--gold),var(--aqua),var(--coral));animation:spin 6s linear infinite;box-shadow:0 0 18px rgba(255,107,74,.55)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.local-badge{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.03)}
+.local-badge i{width:7px;height:7px;border-radius:50%;background:var(--aqua);box-shadow:0 0 8px var(--aqua);animation:blink 2.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+
+/* ---------- card ---------- */
+.card{
+  position:relative;width:100%;max-width:640px;
+  background:var(--card);
+  border:1px solid var(--line);border-radius:26px;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.09);
+  padding:clamp(24px,4.5vw,42px);
+  transform-style:preserve-3d;will-change:transform;
+}
+.card::before{
+  content:"";position:absolute;inset:-1px;border-radius:27px;padding:1px;pointer-events:none;
+  background:linear-gradient(120deg,rgba(255,107,74,.5),transparent 30%,transparent 70%,rgba(78,225,193,.5));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:.6;
+}
+
+/* ---------- steps ---------- */
+.step{display:none}
+.step.active{display:block;animation:stepIn .55s cubic-bezier(.22,.9,.3,1) both}
+@keyframes stepIn{from{opacity:0;transform:translateY(22px) scale(.985)}to{opacity:1;transform:none}}
+
+h1{font-family:var(--disp);font-weight:800;font-size:clamp(26px,4.6vw,40px);line-height:1.14;letter-spacing:-.01em}
+h1 .grad{
+  background:linear-gradient(92deg,var(--coral),var(--gold) 55%,var(--aqua));
+  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:gradShift 5s ease-in-out infinite;
+}
+@keyframes gradShift{0%,100%{background-position:0% 0}50%{background-position:100% 0}}
+.sub{margin-top:12px;color:var(--dim);font-size:16px;line-height:1.55;max-width:46ch}
+
+/* ---------- dropzone ---------- */
+.dropzone{
+  position:relative;margin-top:26px;border:2px dashed rgba(255,255,255,.22);border-radius:20px;
+  min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  cursor:pointer;text-align:center;padding:34px 22px;overflow:hidden;
+  transition:border-color .25s,background .25s,transform .25s,box-shadow .25s;
+}
+.dropzone::after{ /* sheen sweep */
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.06) 50%,transparent 60%);
+  background-size:250% 100%;animation:sheen 4.5s ease-in-out infinite;pointer-events:none;
+}
+@keyframes sheen{0%{background-position:120% 0}60%,100%{background-position:-120% 0}}
+.dropzone:hover{border-color:var(--aqua);background:rgba(78,225,193,.05)}
+.dropzone.is-dragging{
+  border-style:solid;border-color:var(--aqua);background:rgba(78,225,193,.08);
+  transform:scale(1.015);box-shadow:0 0 0 6px rgba(78,225,193,.12),0 0 50px rgba(78,225,193,.2) inset;
+}
+.dz-icon{width:74px;height:74px;border-radius:22px;display:grid;place-items:center;
+  background:linear-gradient(140deg,rgba(255,107,74,.2),rgba(78,225,193,.16));
+  border:1px solid var(--line);animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.dz-title{font-family:var(--disp);font-weight:500;font-size:19px}
+.dz-title b{color:var(--aqua);font-weight:800}
+.dz-sub{font-size:13px;color:var(--dim)}
+.dz-formats{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--dim);opacity:.8}
+.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* ---------- ready step ---------- */
+.frame{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:rgba(0,0,0,.25);display:grid;place-items:center}
+.frame img{display:block;max-width:100%;max-height:280px;object-fit:contain;animation:stepIn .5s cubic-bezier(.22,.9,.3,1) both}
+.icon-btn{
+  position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;
+  border:1px solid var(--line);background:rgba(10,15,30,.7);color:var(--ink);
+  font-size:15px;cursor:pointer;display:grid;place-items:center;backdrop-filter:blur(6px);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),background .18s,color .18s;
+}
+.icon-btn:hover{transform:scale(1.14) rotate(90deg);background:var(--coral);color:#fff}
+
+.field{margin-top:24px}
+.field-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.field-head label{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.kb-read{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--gold)}
+.kb-read small{font-size:11px;color:var(--dim);font-weight:500;margin-left:3px}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:999px;
+  background:linear-gradient(90deg,var(--coral),var(--gold) var(--fill,10%),rgba(255,255,255,.12) var(--fill,10%));
+  cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:26px;height:26px;border-radius:50%;
+  background:#fff;border:5px solid var(--coral);
+  box-shadow:0 0 0 5px rgba(255,107,74,.22),0 4px 14px rgba(0,0,0,.45);
+  transition:transform .15s cubic-bezier(.34,1.56,.64,1);
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:5px solid var(--coral);box-shadow:0 0 0 5px rgba(255,107,74,.22)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.05em;
+  color:var(--dim);background:rgba(255,255,255,.05);border:1px solid var(--line);
+  border-radius:999px;padding:7px 14px;cursor:pointer;transition:all .18s ease;
+}
+.chip:hover{transform:translateY(-2px);color:var(--ink);border-color:rgba(255,255,255,.3)}
+.chip.is-on{background:linear-gradient(90deg,var(--coral),var(--coral2));color:#fff;border-color:transparent;box-shadow:0 4px 18px rgba(255,107,74,.4)}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;margin-top:14px;background:rgba(0,0,0,.2)}
+.seg button{
+  border:none;border-radius:999px;padding:8px 18px;font-size:12.5px;font-weight:600;letter-spacing:.08em;
+  color:var(--dim);background:transparent;cursor:pointer;transition:all .2s ease;text-transform:uppercase;
+}
+.seg button.is-on{background:linear-gradient(90deg,var(--aqua),#67f0d4);color:#06251e;box-shadow:0 3px 14px rgba(78,225,193,.4)}
+.seg button:disabled{opacity:.35;cursor:not-allowed;text-decoration:line-through}
+
+.big-btn{
+  position:relative;overflow:hidden;width:100%;margin-top:26px;border:none;cursor:pointer;
+  font-family:var(--disp);font-weight:800;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:#fff;
+  padding:19px 20px;border-radius:16px;
+  background:linear-gradient(92deg,var(--coral),#ff9345,var(--gold));background-size:200% 100%;
+  box-shadow:0 12px 34px rgba(255,107,74,.4),inset 0 1px 0 rgba(255,255,255,.35);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s,filter .2s;
+  animation:gradShift 4s ease-in-out infinite;
+}
+.big-btn:hover:not(:disabled){transform:translateY(-3px) scale(1.01);box-shadow:0 18px 44px rgba(255,107,74,.55)}
+.big-btn:active:not(:disabled){transform:translateY(1px) scale(.99)}
+.big-btn:disabled{filter:grayscale(.7) brightness(.7);cursor:not-allowed;box-shadow:none}
+.big-btn::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.45) 50%,transparent 60%);
+  background-size:250% 100%;animation:sheen 2.8s ease-in-out infinite;
+}
+.status-row{margin-top:14px;font-family:var(--mono);font-size:12px;line-height:1.5;text-align:center;min-height:18px;color:var(--dim);transition:color .3s}
+.status-row.err{color:#ff8a7a}
+.status-row.info{color:var(--gold)}
+
+/* ---------- processing overlay ---------- */
+.processing{
+  position:absolute;inset:0;border-radius:26px;z-index:10;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  background:rgba(8,12,26,.62);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+}
+.processing.active{display:flex;animation:fadeIn .35s ease both}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.squeeze-wrap{position:relative;width:190px;height:190px;display:grid;place-items:center}
+.squeeze-wrap img{
+  width:120px;height:120px;object-fit:cover;border-radius:18px;position:absolute;
+  border:2px solid rgba(255,255,255,.25);
+  box-shadow:0 0 30px rgba(255,107,74,.5),0 0 70px rgba(78,225,193,.25);
+  transition:transform .3s ease;will-change:transform;
+}
+.ring{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6;stroke-linecap:round}
+.ring .bg{stroke:rgba(255,255,255,.1)}
+.ring .fg{stroke:url(#ringGrad);stroke-dasharray:565.5;stroke-dashoffset:565.5;filter:drop-shadow(0 0 8px rgba(255,107,74,.7))}
+.proc-pct{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-weight:700;font-size:22px;color:var(--gold);
+  background:rgba(10,15,30,.85);border:1px solid var(--line);border-radius:999px;padding:4px 16px;white-space:nowrap}
+.proc-label{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--aqua);text-transform:uppercase;animation:blink 1.4s ease-in-out infinite;margin-top:10px}
+
+/* ---------- done step ---------- */
+.compare{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);--pos:50%;background:rgba(0,0,0,.3);user-select:none}
+.compare > img{display:block;width:100%;height:auto}
+.compare-top{position:absolute;inset:0;clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+.compare-top img{display:block;width:100%;height:100%;object-fit:fill}
+.compare-handle{position:absolute;top:0;bottom:0;left:var(--pos);width:2px;background:#fff;box-shadow:0 0 14px rgba(255,255,255,.8);transform:translateX(-50%);pointer-events:none}
+.compare-handle::after{
+  content:"⇔";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(140deg,var(--coral),var(--coral2));color:#fff;font-size:17px;
+  border:2px solid rgba(255,255,255,.85);box-shadow:0 6px 20px rgba(0,0,0,.5);
+}
+.compare-range{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize;-webkit-appearance:none;appearance:none;margin:0}
+.cmp-tag{position:absolute;top:10px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.2em;padding:5px 10px;border-radius:999px;pointer-events:none}
+.cmp-tag.l{left:10px;background:var(--aqua);color:#06251e}
+.cmp-tag.r{right:10px;background:rgba(10,15,30,.8);color:var(--ink);border:1px solid var(--line)}
+.compare-hint{margin-top:9px;text-align:center;font-size:12px;color:var(--dim)}
+
+.sizes{display:flex;align-items:center;justify-content:center;gap:clamp(10px,3vw,22px);margin-top:24px;flex-wrap:wrap}
+.size-box{text-align:center}
+.size-box .k{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.size-box .v{font-family:var(--mono);font-weight:700;font-size:clamp(20px,4vw,28px);margin-top:5px}
+.size-box.old .v{color:var(--dim);text-decoration:line-through;text-decoration-color:rgba(255,107,74,.7);text-decoration-thickness:2.5px}
+.size-box.new .v{color:var(--aqua)}
+.arrow{font-size:24px;color:var(--coral);animation:nudge 1.4s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
+.saved-badge{
+  display:inline-block;font-family:var(--disp);font-weight:800;font-size:clamp(15px,2.6vw,19px);color:#06251e;
+  background:linear-gradient(92deg,var(--aqua),#7df0d8);border-radius:999px;padding:9px 20px;
+  box-shadow:0 8px 26px rgba(78,225,193,.45);
+  animation:pop .7s cubic-bezier(.34,1.8,.5,1) both .15s;
+}
+.saved-badge.over{background:linear-gradient(92deg,var(--gold),#ffdf94);box-shadow:0 8px 26px rgba(255,209,102,.4)}
+@keyframes pop{0%{transform:scale(0) rotate(-8deg);opacity:0}70%{transform:scale(1.15) rotate(3deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+.fineprint{margin-top:14px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.05em}
+
+.actions{display:grid;grid-template-columns:1.7fr 1fr;gap:12px;margin-top:24px}
+@media(max-width:480px){.actions{grid-template-columns:1fr}}
+.dl-btn{
+  position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;
+  font-family:var(--disp);font-weight:800;font-size:14.5px;letter-spacing:.04em;text-transform:uppercase;
+  color:#06251e;text-decoration:none;padding:17px 16px;border-radius:15px;
+  background:linear-gradient(92deg,var(--aqua),#7df0d8);
+  box-shadow:0 12px 32px rgba(78,225,193,.4);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s;
+}
+.dl-btn:hover{transform:translateY(-3px);box-shadow:0 18px 42px rgba(78,225,193,.55)}
+.dl-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.55) 50%,transparent 60%);background-size:250% 100%;animation:sheen 2.6s ease-in-out infinite}
+.ghost-btn{
+  border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);
+  border-radius:15px;padding:17px 14px;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
+  transition:all .2s ease;
+}
+.ghost-btn:hover{background:rgba(255,255,255,.1);transform:translateY(-3px)}
+
+footer{position:relative;z-index:2;margin-top:26px;font-size:12px;color:var(--dim);letter-spacing:.04em;text-align:center;padding:0 16px}
+footer b{color:var(--aqua);font-weight:600}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>ProFile Compressor</h1>
-            <p>Compress your files securely with precise target control and zero quality loss loopholes.</p>
-        </header>
 
-        <main>
-            <form id="uploadForm">
-                <div class="drop-zone" id="dropZone">
-                    <span class="drop-zone-prompt" id="dropZonePrompt">
-                        Drag & drop your file here or <span class="browse-link">browse</span>
-                    </span>
-                    <input type="file" id="fileInput" name="file" class="drop-zone-input" accept="image/*">
-                    
-                    <!-- NEW: Image Preview Container -->
-                    <div id="previewContainer" class="hidden">
-                        <img id="imagePreview" src="" alt="Image Preview">
-                        <button type="button" id="cancelBtn" class="btn-cancel">Remove Image</button>
-                    </div>
-                </div>
+<canvas id="fxBack"></canvas>
+<div id="cursorGlow" aria-hidden="true"></div>
 
-                <div class="settings-group">
-                    <label for="targetSize">Target Size (KB):</label>
-                    <input type="number" id="targetSize" name="targetSize" value="500" min="50" max="50000">
-                </div>
+<main class="app">
+  <header class="top">
+    <div class="logo"><span class="logo-dot"></span>ProFile</div>
+    <div class="local-badge"><i></i>100% ON-DEVICE</div>
+  </header>
 
-                <button type="submit" id="submitBtn" class="btn">Compress File Now</button>
-            </form>
+  <section class="card" id="card">
 
-            <div id="statusMessage" class="hidden"></div>
-        </main>
+    <!-- STEP 1 · DROP -->
+    <div class="step active" id="stepDrop">
+      <h1>Squeeze any image<br><span class="grad">to your exact size.</span></h1>
+      <p class="sub">Drop it in, pick a target, done. Pixel-smart compression that never leaves your device.</p>
+      <div class="dropzone" id="dropZone" tabindex="0" role="button" aria-label="Drop an image or press Enter to browse">
+        <div class="dz-icon" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <rect x="3" y="6" width="28" height="22" rx="4" stroke="#4ee1c1" stroke-width="2.2"/>
+            <circle cx="12" cy="14" r="2.6" fill="#ffd166"/>
+            <path d="M6 25l7-7 5 5 5-6 5 6" stroke="#ff6b4a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="dz-title">Drop your image <b>here</b></div>
+        <div class="dz-sub">or tap to browse your files</div>
+        <div class="dz-formats">JPG · PNG · WEBP · GIF — UP TO 80 MB</div>
+        <input type="file" id="fileInput" accept="image/*" aria-hidden="true">
+      </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- STEP 2 · READY -->
+    <div class="step" id="stepReady">
+      <div class="frame">
+        <img id="imagePreview" src="" alt="Your image preview">
+        <button type="button" class="icon-btn" id="cancelBtn" title="Remove image" aria-label="Remove image">✕</button>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="sizeSlider">Target size</label>
+          <span class="kb-read"><span id="kbEcho">500</span><small>KB</small></span>
+        </div>
+        <input type="range" id="sizeSlider" min="50" max="5000" step="10" value="500" aria-label="Target size in kilobytes">
+        <div class="chips" id="chips">
+          <button type="button" class="chip" data-kb="200">200 KB</button>
+          <button type="button" class="chip is-on" data-kb="500">500 KB</button>
+          <button type="button" class="chip" data-kb="1000">1 MB</button>
+          <button type="button" class="chip" data-kb="2500">2.5 MB</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><label>Output format</label></div>
+        <div class="seg" id="codecSeg" role="group" aria-label="Output format">
+          <button type="button" data-mime="image/webp" class="is-on">WebP</button>
+          <button type="button" data-mime="image/jpeg">JPEG</button>
+        </div>
+      </div>
+
+      <button type="button" class="big-btn" id="compressBtn">⚡ Compress it</button>
+      <div class="status-row" id="statusRow" aria-live="polite"></div>
+    </div>
+
+    <!-- STEP 4 · DONE -->
+    <div class="step" id="stepDone">
+      <div class="compare" id="compare" style="--pos:50%">
+        <img id="cmpOriginal" alt="Original image">
+        <div class="compare-top"><img id="cmpCompressed" alt="Compressed image"></div>
+        <div class="compare-handle" aria-hidden="true"></div>
+        <span class="cmp-tag l">NEW</span>
+        <span class="cmp-tag r">ORIGINAL</span>
+        <input type="range" id="compareRange" class="compare-range" min="0" max="100" value="50" aria-label="Drag to compare before and after">
+      </div>
+      <div class="compare-hint">↔ drag across the image to compare</div>
+
+      <div class="sizes">
+        <div class="size-box old"><div class="k">Before</div><div class="v" id="sizeBefore">—</div></div>
+        <div class="arrow" aria-hidden="true">➜</div>
+        <div class="size-box new"><div class="k">After</div><div class="v" id="sizeAfter">—</div></div>
+        <span class="saved-badge" id="savedBadge">−0%</span>
+      </div>
+      <div class="fineprint" id="finePrint"></div>
+
+      <div class="actions">
+        <a class="dl-btn" id="downloadBtn" download>
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true"><path d="M8.5 1v10M4 7.5l4.5 4.5L13 7.5M2 15.5h13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download
+        </a>
+        <button type="button" class="ghost-btn" id="againBtn">↺ New image</button>
+      </div>
+    </div>
+
+    <!-- STEP 3 · PROCESSING OVERLAY -->
+    <div class="processing" id="processing" aria-live="polite">
+      <div class="squeeze-wrap">
+        <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ff6b4a"/><stop offset="55%" stop-color="#ffd166"/><stop offset="100%" stop-color="#4ee1c1"/>
+            </linearGradient>
+          </defs>
+          <circle class="bg" cx="100" cy="100" r="90"/>
+          <circle class="fg" id="ringFg" cx="100" cy="100" r="90"/>
+        </svg>
+        <img id="squeezeImg" src="" alt="">
+        <div class="proc-pct" id="procPct">0%</div>
+      </div>
+      <div class="proc-label" id="procLabel">Squeezing pixels…</div>
+    </div>
+
+  </section>
+
+  <footer>Every byte stays on your machine — <b>0 uploads, 0 tracking</b>, just pure squeeze.</footer>
+</main>
+
+<canvas id="fxFront"></canvas>
+
+<script>
+(function(){
+"use strict";
+
+/* ================= DOM ================= */
+const $ = id => document.getElementById(id);
+const card=$('card'), stepDrop=$('stepDrop'), stepReady=$('stepReady'), stepDone=$('stepDone');
+const dropZone=$('dropZone'), fileInput=$('fileInput'), imagePreview=$('imagePreview'), cancelBtn=$('cancelBtn');
+const sizeSlider=$('sizeSlider'), kbEcho=$('kbEcho'), chipsBox=$('chips'), codecSeg=$('codecSeg');
+const compressBtn=$('compressBtn'), statusRow=$('statusRow');
+const processing=$('processing'), ringFg=$('ringFg'), procPct=$('procPct'), procLabel=$('procLabel'), squeezeImg=$('squeezeImg');
+const compareEl=$('compare'), compareRange=$('compareRange'), cmpOriginal=$('cmpOriginal'), cmpCompressed=$('cmpCompressed');
+const sizeBefore=$('sizeBefore'), sizeAfter=$('sizeAfter'), savedBadge=$('savedBadge'), finePrint=$('finePrint');
+const downloadBtn=$('downloadBtn'), againBtn=$('againBtn'), cursorGlow=$('cursorGlow');
+
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const RING_C = 565.5;
+
+/* ================= state ================= */
+let currentFile=null, originalURL=null, compressedURL=null, outputMime='image/webp', busy=false;
+
+/* ================= helpers ================= */
+function fmtBytes(b){
+  if(b>=1048576) return (b/1048576).toFixed(2)+' MB';
+  if(b>=1024)    return (b/1024).toFixed(1)+' KB';
+  return Math.round(b)+' B';
+}
+function clampKB(v){ return Math.min(5000, Math.max(50, Math.round(v)||500)); }
+function tick(){ return new Promise(r=>setTimeout(r,0)); }
+function loadImage(url){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error('decode')); im.src=url; }); }
+function canvasBlob(cv,mime,q){
+  return new Promise(res=>{
+    cv.toBlob(b=>{
+      if(b) return res(b);
+      const d=cv.toDataURL(mime,q), bin=atob(d.split(',')[1]), arr=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+      res(new Blob([arr],{type:mime}));
+    },mime,q);
+  });
+}
+function springCount(el,target,fmt,dur){
+  dur=dur||800; const t0=performance.now();
+  function frame(t){
+    const p=Math.min(1,(t-t0)/dur);
+    const e=1-Math.pow(1-p,3);           // ease-out cubic
+    el.textContent=fmt(target*e);
+    if(p<1) requestAnimationFrame(frame); else el.textContent=fmt(target);
+  }
+  requestAnimationFrame(frame);
+}
+function showStep(el){ [stepDrop,stepReady,stepDone].forEach(s=>s.classList.remove('active')); el.classList.add('active'); }
+function setStatus(kind,msg){ statusRow.className='status-row'+(kind?' '+kind:''); statusRow.innerHTML=msg||''; }
+
+/* ============================================================
+   FX ENGINE — two canvas layers (ambient back / action front)
+   ============================================================ */
+const backCv=$('fxBack'), frontCv=$('fxFront');
+const bctx=backCv.getContext('2d'), fctx=frontCv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth; H=innerHeight;
+  [backCv,frontCv].forEach(cv=>{ cv.width=W*DPR; cv.height=H*DPR; cv.style.width=W+'px'; cv.style.height=H+'px'; });
+  bctx.setTransform(DPR,0,0,DPR,0,0); fctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',resize); resize();
+
+const PAL=['#ff6b4a','#4ee1c1','#ffd166','#7aa2ff','#ff9ecb'];
+const mouse={x:W/2,y:H/2,tx:W/2,ty:H/2};
+const glowPos={x:W/2,y:H/2};
+
+/* ambient drifting dust */
+const dust=[];
+const DUST_N = REDUCED?0:Math.min(90,Math.round(W*H/16000));
+for(let i=0;i<DUST_N;i++){
+  dust.push({
+    x:Math.random()*W, y:Math.random()*H,
+    z:.3+Math.random()*.7,                      // depth for parallax
+    r:.6+Math.random()*1.8,
+    ph:Math.random()*Math.PI*2, sp:.4+Math.random()*.9,
+    c:PAL[i%PAL.length]
+  });
+}
+/* aurora orbs */
+const orbs=[
+  {bx:.16,by:.22,r:330,c:'255,107,74', sp:.11, ph:0},
+  {bx:.86,by:.18,r:300,c:'78,225,193',  sp:.14, ph:2},
+  {bx:.78,by:.88,r:340,c:'122,162,255', sp:.09, ph:4},
+  {bx:.12,by:.85,r:280,c:'255,209,102', sp:.12, ph:1}
+];
+
+let vortexOn=false, vortex={x:W/2,y:H/2};
+const swirl=[], bursts=[], waves=[], sparks=[];
+
+function spawnSwirl(){
+  const a=Math.random()*Math.PI*2, rad=180+Math.random()*240;
+  swirl.push({
+    x:vortex.x+Math.cos(a)*rad, y:vortex.y+Math.sin(a)*rad,
+    a:a, rad:rad, spin:(.05+Math.random()*.07)*(Math.random()<.5?1:-1)*-1,
+    pull:1.1+Math.random()*1.6, r:1+Math.random()*2.4,
+    c:PAL[(Math.random()*PAL.length)|0], life:1
+  });
+}
+function burst(x,y,n,pow){
+  if(REDUCED) return;
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, v=(pow||6)*(0.35+Math.random());
+    bursts.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-2.4,g:.11,r:1.5+Math.random()*3,c:PAL[(Math.random()*PAL.length)|0],life:1,decay:.011+Math.random()*.014});
+  }
+}
+function wave(x,y){ if(!REDUCED) waves.push({x:x,y:y,r:6,a:.65}); }
+
+addEventListener('pointermove',e=>{ mouse.tx=e.clientX; mouse.ty=e.clientY;
+  if(!REDUCED && Math.random()<.3) sparks.push({x:e.clientX,y:e.clientY,vx:(Math.random()-.5)*.6,vy:(Math.random()-.5)*.6,r:.8+Math.random()*1.4,c:Math.random()<.5?'#4ee1c1':'#ffd166',life:1});
+});
+
+let last=0;
+function loop(t){
+  const dt=Math.min(33,t-last)||16; last=t;
+  const tt=t/1000;
+  mouse.x+=(mouse.tx-mouse.x)*.08; mouse.y+=(mouse.ty-mouse.y)*.08;
+  glowPos.x+=(mouse.tx-glowPos.x)*.14; glowPos.y+=(mouse.ty-glowPos.y)*.14;
+  cursorGlow.style.transform='translate3d('+glowPos.x+'px,'+glowPos.y+'px,0)';
+
+  /* --- BACK: orbs + dust --- */
+  bctx.clearRect(0,0,W,H);
+  for(const o of orbs){
+    const ox=o.bx*W+Math.sin(tt*o.sp+o.ph)*70, oy=o.by*H+Math.cos(tt*o.sp*1.3+o.ph)*55;
+    const g=bctx.createRadialGradient(ox,oy,0,ox,oy,o.r);
+    g.addColorStop(0,'rgba('+o.c+',0.14)'); g.addColorStop(1,'rgba('+o.c+',0)');
+    bctx.fillStyle=g; bctx.beginPath(); bctx.arc(ox,oy,o.r,0,7); bctx.fill();
+  }
+  for(const p of dust){
+    p.x+=Math.sin(tt*.3+p.ph)*.12*p.z + .05*p.z;
+    p.y+=Math.cos(tt*.22+p.ph)*.1*p.z;
+    if(p.x>W+10)p.x=-10; if(p.x<-10)p.x=W+10; if(p.y>H+10)p.y=-10; if(p.y<-10)p.y=H+10;
+    const px=p.x+(mouse.x-W/2)*-.02*p.z, py=p.y+(mouse.y-H/2)*-.02*p.z;
+    const tw=.35+.65*Math.abs(Math.sin(tt*p.sp+p.ph));
+    bctx.globalAlpha=tw*.7*p.z;
+    bctx.fillStyle=p.c;
+    bctx.beginPath(); bctx.arc(px,py,p.r,0,7); bctx.fill();
+  }
+  bctx.globalAlpha=1;
+
+  /* --- FRONT: vortex, bursts, waves, sparks --- */
+  fctx.clearRect(0,0,W,H);
+  if(vortexOn && swirl.length<160 && Math.random()<.65) spawnSwirl();
+  fctx.globalCompositeOperation='lighter';
+  for(let i=swirl.length-1;i>=0;i--){
+    const s=swirl[i];
+    s.a+=s.spin; s.rad-=s.pull;
+    s.x=vortex.x+Math.cos(s.a)*s.rad; s.y=vortex.y+Math.sin(s.a)*s.rad;
+    if(s.rad<14){ wave(vortex.x,vortex.y); swirl.splice(i,1); continue; }
+    fctx.globalAlpha=Math.min(1,s.rad/80)*.9;
+    fctx.fillStyle=s.c;
+    fctx.beginPath(); fctx.arc(s.x,s.y,s.r,0,7); fctx.fill();
+  }
+  for(let i=bursts.length-1;i>=0;i--){
+    const b=bursts[i];
+    b.x+=b.vx; b.y+=b.vy; b.vy+=b.g; b.life-=b.decay;
+    if(b.life<=0){ bursts.splice(i,1); continue; }
+    fctx.globalAlpha=Math.max(0,b.life);
+    fctx.fillStyle=b.c;
+    fctx.beginPath(); fctx.arc(b.x,b.y,b.r*b.life,0,7); fctx.fill();
+  }
+  for(let i=sparks.length-1;i>=0;i--){
+    const s=sparks[i];
+    s.x+=s.vx; s.y+=s.vy; s.life-=.03;
+    if(s.life<=0){ sparks.splice(i,1); continue; }
+    fctx.globalAlpha=s.life*.6; fctx.fillStyle=s.c;
+    fctx.beginPath(); fctx.arc(s.x,s.y,s.r*s.life,0,7); fctx.fill();
+  }
+  fctx.globalCompositeOperation='source-over';
+  for(let i=waves.length-1;i>=0;i--){
+    const wv=waves[i];
+    wv.r+=7; wv.a-=.022;
+    if(wv.a<=0){ waves.splice(i,1); continue; }
+    fctx.globalAlpha=Math.max(0,wv.a);
+    fctx.strokeStyle='#ffd166'; fctx.lineWidth=2;
+    fctx.beginPath(); fctx.arc(wv.x,wv.y,wv.r,0,7); fctx.stroke();
+  }
+  fctx.globalAlpha=1;
+  requestAnimationFrame(loop);
+}
+if(!REDUCED) requestAnimationFrame(loop);
+
+/* card 3D tilt */
+if(!REDUCED && matchMedia('(pointer:fine)').matches){
+  const tilt={x:0,y:0,tx:0,ty:0};
+  card.addEventListener('pointermove',e=>{
+    const r=card.getBoundingClientRect();
+    tilt.tx=((e.clientY-r.top)/r.height-.5)*-3;
+    tilt.ty=((e.clientX-r.left)/r.width-.5)*3;
+  });
+  card.addEventListener('pointerleave',()=>{ tilt.tx=0; tilt.ty=0; });
+  (function tiltLoop(){
+    tilt.x+=(tilt.tx-tilt.x)*.1; tilt.y+=(tilt.ty-tilt.y)*.1;
+    card.style.transform='perspective(1100px) rotateX('+tilt.x.toFixed(2)+'deg) rotateY('+tilt.y.toFixed(2)+'deg)';
+    requestAnimationFrame(tiltLoop);
+  })();
+}
+function cardCenter(){ const r=card.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; }
+
+/* ================= codec detect ================= */
+(function(){
+  const c=document.createElement('canvas'); c.width=c.height=2;
+  if(c.toDataURL('image/webp').indexOf('data:image/webp')!==0){
+    outputMime='image/jpeg';
+    const w=codecSeg.querySelector('[data-mime="image/webp"]'), j=codecSeg.querySelector('[data-mime="image/jpeg"]');
+    w.disabled=true; w.classList.remove('is-on'); j.classList.add('is-on');
+  }
+})();
+codecSeg.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-mime]');
+  if(!b||b.disabled||busy) return;
+  codecSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('is-on',x===b));
+  outputMime=b.dataset.mime;
+});
+
+/* ================= slider ================= */
+function paintSlider(){
+  const p=(sizeSlider.value-sizeSlider.min)/(sizeSlider.max-sizeSlider.min)*100;
+  sizeSlider.style.setProperty('--fill',p+'%');
+  kbEcho.textContent=Number(sizeSlider.value).toLocaleString();
+}
+sizeSlider.addEventListener('input',()=>{
+  paintSlider();
+  chipsBox.querySelectorAll('.chip').forEach(c=>c.classList.toggle('is-on',Number(c.dataset.kb)===Number(sizeSlider.value)));
+});
+chipsBox.addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  sizeSlider.value=c.dataset.kb; paintSlider();
+  chipsBox.querySelectorAll('.chip').forEach(x=>x.classList.toggle('is-on',x===c));
+  const cc=cardCenter(); burst(cc.x,cc.y,10,3.4);
+});
+paintSlider();
+
+/* ================= file intake ================= */
+function acceptFile(file){
+  if(!file) return;
+  if(!file.type||file.type.indexOf('image/')!==0){ setStatus('err','That doesn\u2019t look like an image — try JPG, PNG, WebP or GIF.'); return; }
+  if(file.size>80*1024*1024){ setStatus('err','Whoa, that\u2019s over the 80 MB limit.'); return; }
+  setStatus('','');
+  if(originalURL) URL.revokeObjectURL(originalURL);
+  currentFile=file;
+  originalURL=URL.createObjectURL(file);
+  imagePreview.src=originalURL;
+  showStep(stepReady);
+  const cc=cardCenter(); wave(cc.x,cc.y); burst(cc.x,cc.y,26,5);
+}
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileInput.click(); } });
+fileInput.addEventListener('change',()=>acceptFile(fileInput.files[0]));
+let dragDepth=0;
+dropZone.addEventListener('dragenter',e=>{ e.preventDefault(); dragDepth++; dropZone.classList.add('is-dragging'); });
+dropZone.addEventListener('dragover',e=>e.preventDefault());
+dropZone.addEventListener('dragleave',e=>{ e.preventDefault(); if(--dragDepth<=0){ dragDepth=0; dropZone.classList.remove('is-dragging'); } });
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault(); dragDepth=0; dropZone.classList.remove('is-dragging');
+  if(e.dataTransfer.files.length) acceptFile(e.dataTransfer.files[0]);
+});
+
+function fullReset(){
+  if(originalURL) URL.revokeObjectURL(originalURL);
+  if(compressedURL) URL.revokeObjectURL(compressedURL);
+  originalURL=compressedURL=null; currentFile=null; fileInput.value='';
+  setStatus('',''); showStep(stepDrop);
+}
+cancelBtn.addEventListener('click',()=>{ const cc=cardCenter(); burst(cc.x,cc.y,14,4); fullReset(); });
+againBtn.addEventListener('click',fullReset);
+
+/* compare slider */
+compareRange.addEventListener('input',()=>compareEl.style.setProperty('--pos',compareRange.value+'%'));
+
+/* ================= progress UI ================= */
+function setProgress(frac,label){
+  const p=Math.min(1,Math.max(0,frac));
+  ringFg.style.strokeDashoffset=(RING_C*(1-p)).toFixed(1);
+  procPct.textContent=Math.round(p*100)+'%';
+  if(label) procLabel.textContent=label;
+  squeezeImg.style.transform='scale('+(1-p*.22).toFixed(3)+') rotate('+(p*4).toFixed(1)+'deg)';
+}
+
+/* ================= compression engine ================= */
+async function runCompression(targetBytes,onPass){
+  const img=await loadImage(originalURL);
+  const MIN_Q=.35, MAX_Q=.96, ITER=7, ROUNDS=5;
+  let scale=1, passes=0, best=null, bestQ=MAX_Q, bestW=0, bestH=0;
+
+  for(let round=0; round<ROUNDS; round++){
+    passes++; onPass(passes);
+    const w=Math.max(1,Math.round(img.naturalWidth*scale));
+    const h=Math.max(1,Math.round(img.naturalHeight*scale));
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx=cv.getContext('2d');
+    if(outputMime==='image/jpeg'){ ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); }
+    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,0,0,w,h);
+
+    let lo=MIN_Q, hi=MAX_Q, found=null, foundQ=MIN_Q;
+    for(let i=0;i<ITER;i++){
+      const q=(lo+hi)/2;
+      setProgress((round+i/ITER)/ROUNDS,'Pass '+passes+' · hunting quality '+Math.round(q*100)+'%');
+      const blob=await canvasBlob(cv,outputMime,q); await tick();
+      if(blob.size<=targetBytes){ found=blob; foundQ=q; lo=q; } else hi=q;
+    }
+    if(found){ best=found; bestQ=foundQ; bestW=w; bestH=h; break; }
+
+    const floor=await canvasBlob(cv,outputMime,MIN_Q);
+    if(!best||floor.size<best.size){ best=floor; bestQ=MIN_Q; bestW=w; bestH=h; }
+    scale*=Math.max(.2,Math.sqrt(targetBytes/Math.max(1,floor.size))*.92);
+    if(scale<.04) break;
+  }
+  setProgress(1,'Polishing…');
+  return {blob:best,quality:bestQ,width:bestW,height:bestH,passes:passes,hit:best.size<=targetBytes};
+}
+
+compressBtn.addEventListener('click',async()=>{
+  if(busy||!currentFile) return;
+  busy=true; compressBtn.disabled=true; setStatus('','');
+
+  const targetKB=clampKB(Number(sizeSlider.value));
+  const targetBytes=targetKB*1024;
+
+  /* enter processing state */
+  squeezeImg.src=originalURL;
+  processing.classList.add('active');
+  setProgress(0,'Warming up…');
+  const cc=cardCenter(); vortex.x=cc.x; vortex.y=cc.y; vortexOn=true;
+
+  const t0=performance.now();
+  try{
+    const res=await runCompression(targetBytes,p=>{ wave(vortex.x,vortex.y); setProgress(null,'Pass '+p+' · squeezing…'); });
+    vortexOn=false;
+    processing.classList.remove('active');
+
+    if(compressedURL) URL.revokeObjectURL(compressedURL);
+    compressedURL=URL.createObjectURL(res.blob);
+    const ext=outputMime==='image/webp'?'webp':'jpg';
+    const base=(currentFile.name.replace(/\.[^.]+$/,'')||'image');
+    downloadBtn.href=compressedURL;
+    downloadBtn.download=base+'-squeezed.'+ext;
+
+    /* populate done */
+    cmpOriginal.src=originalURL; cmpCompressed.src=compressedURL;
+    compareRange.value=50; compareEl.style.setProperty('--pos','50%');
+    const orig=currentFile.size, comp=res.blob.size;
+    const saved=(orig-comp)/orig*100;
+
+    showStep(stepDone);
+    springCount(sizeBefore,orig,fmtBytes);
+    springCount(sizeAfter,comp,fmtBytes);
+    savedBadge.classList.toggle('over',saved<0);
+    savedBadge.textContent=(saved>=0?'−':'+')+Math.abs(saved).toFixed(1)+'%';
+    finePrint.textContent='quality '+Math.round(res.quality*100)+'% · '+res.passes+(res.passes===1?' pass':' passes')+' · '+res.width+'×'+res.height+' px · '+((performance.now()-t0)/1000).toFixed(1)+'s'+(res.hit?'':' · best effort');
+
+    /* celebration VFX */
+    const c2=cardCenter();
+    wave(c2.x,c2.y);
+    burst(c2.x,c2.y-40,60,7.5);
+    setTimeout(()=>burst(c2.x-140,c2.y-80,26,5.5),180);
+    setTimeout(()=>burst(c2.x+140,c2.y-80,26,5.5),320);
+
+    if(saved<0) setStatus('info','Heads up: re-encoding grew it slightly — try a lower target.');
+  }catch(err){
+    vortexOn=false; processing.classList.remove('active');
+    setStatus('err','Couldn\u2019t decode that image. Try another file.');
+  }finally{
+    busy=false; compressBtn.disabled=false;
+  }
+});
+
+})();
+</script>
 </body>
 </html>
