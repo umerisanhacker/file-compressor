@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -13,10 +14,18 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve static frontend files (index.html, style.css, script.js)
+app.use(express.static(__dirname));
+
+// Serve index.html when visiting the root URL
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // --- KEEP-ALIVE HEALTH CHECK ENDPOINT ---
 app.get('/ping', (req, res) => res.send('OK'));
 
-// NEW: RAM-Based Storage. No more 'ENOENT' file system errors!
+// RAM-Based Storage
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
@@ -60,7 +69,6 @@ app.post('/api/compress/image', upload.single('file'), async (req, res) => {
 
         console.log(`[SUCCESS] Compression finalized. Output size: ${Math.round(compressedBuffer.length/1024)}KB`);
 
-        // Send directly from memory to the client
         res.set('Content-Disposition', `attachment; filename="ProCompressed-${req.file.originalname.split('.')[0]}.jpg"`);
         res.set('Content-Type', 'image/jpeg');
         res.send(compressedBuffer);
